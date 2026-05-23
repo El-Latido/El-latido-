@@ -13,7 +13,9 @@ app.use(express.json({ limit: "15mb" }));
 
 // Support Netlify Functions route compatibility both locally and on production:
 app.use((req, res, next) => {
-  if (req.url.startsWith("/netlify/functions/server")) {
+  if (req.url.startsWith("/.netlify/functions/server")) {
+    req.url = req.url.replace("/.netlify/functions/server", "/api");
+  } else if (req.url.startsWith("/netlify/functions/server")) {
     req.url = req.url.replace("/netlify/functions/server", "/api");
   }
   next();

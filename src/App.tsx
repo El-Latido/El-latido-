@@ -72,7 +72,7 @@ interface Track {
   coverUrl: string;
 }
 
-const API_BASE = "/netlify/functions/server";
+const API_BASE = "/api";
 
 export default function App() {
   // Authentication & session state
