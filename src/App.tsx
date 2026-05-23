@@ -72,6 +72,8 @@ interface Track {
   coverUrl: string;
 }
 
+const API_BASE = "/netlify/functions/server";
+
 export default function App() {
   // Authentication & session state
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -174,14 +176,14 @@ export default function App() {
     const fetchChatAndUsers = async () => {
       try {
         // Get messages
-        const res = await fetch("/api/messages");
+        const res = await fetch(`${API_BASE}/messages`);
         const data = await res.json();
         if (data.messages) {
           setMessages(data.messages);
         }
 
         // Get users if in admin panel or check current user status
-        const usersRes = await fetch("/api/users");
+        const usersRes = await fetch(`${API_BASE}/users`);
         const usersData = await usersRes.json();
         if (usersData.users) {
           setSystemUsers(usersData.users);
@@ -255,7 +257,7 @@ export default function App() {
   // Handlers for Data Fetching
   const fetchAnimeData = async () => {
     try {
-      const res = await fetch("/api/anime");
+      const res = await fetch(`${API_BASE}/anime`);
       const data = await res.json();
       if (data.animeList) {
         setAnimeList(data.animeList);
@@ -267,7 +269,7 @@ export default function App() {
 
   const fetchMusicDatabase = async () => {
     try {
-      const res = await fetch("/api/music");
+      const res = await fetch(`${API_BASE}/music`);
       const data = await res.json();
       if (data.tracks) {
         setPlaylist(data.tracks);
@@ -293,7 +295,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch("/api/login", {
+      const res = await fetch(`${API_BASE}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: loginUsername.trim(), pin: loginPin })
@@ -341,7 +343,7 @@ export default function App() {
 
     setIsSending(true);
     try {
-      const res = await fetch("/api/messages", {
+      const res = await fetch(`${API_BASE}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -459,7 +461,7 @@ export default function App() {
   const sendVoiceMessage = async (base64Payload: string) => {
     if (!currentUser) return;
     try {
-      const res = await fetch("/api/messages", {
+      const res = await fetch(`${API_BASE}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -484,7 +486,7 @@ export default function App() {
     setIsElizabethLoading(true);
     setSupportAnswer("");
     try {
-      const res = await fetch("/api/elizabeth/help", {
+      const res = await fetch(`${API_BASE}/elizabeth/help`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -515,7 +517,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch("/api/anime", {
+      const res = await fetch(`${API_BASE}/anime`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -563,7 +565,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch("/api/users/unban", {
+      const res = await fetch(`${API_BASE}/users/unban`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: unbanUsername.trim(), adminPin: unbanAdminPin })
@@ -576,7 +578,7 @@ export default function App() {
         setUnbanMessage({ text: `¡Reactivación exitosa! @${unbanUsername} ya puede ingresar de nuevo.`, isError: false });
         setUnbanUsername("");
         // refresh list
-        const uRes = await fetch("/api/users");
+        const uRes = await fetch(`${API_BASE}/users`);
         const uData = await uRes.json();
         if (uData.users) setSystemUsers(uData.users);
       }

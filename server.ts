@@ -11,6 +11,14 @@ const PORT = 3000;
 // Increase limit to handle base64 audio messages comfortably
 app.use(express.json({ limit: "15mb" }));
 
+// Support Netlify Functions route compatibility both locally and on production:
+app.use((req, res, next) => {
+  if (req.url.startsWith("/netlify/functions/server")) {
+    req.url = req.url.replace("/netlify/functions/server", "/api");
+  }
+  next();
+});
+
 // Initialize Google GenAI lazy-style or safely with handle fallback
 let ai: GoogleGenAI | null = null;
 if (process.env.GEMINI_API_KEY) {
@@ -665,6 +673,12 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ error: "Surgió un error crítico en la terminal del servidor otaku." });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Otaku Chat server running successfully on http://0.0.0.0:${PORT}`);
-});
+// Only run standalone express server when outside serverless context
+if (!process.env.NETLIFY && !process.env.LAMBDA_TASK_ROOT && process.env.NODE_ENV !== "test") {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Otaku Chat server running successfully on http://0.0.0.0:${PORT}`);
+  });
+}
+
+export default app;
+export { app };
