@@ -1,0 +1,6 @@
+{
+  "name": "Otaku Chat & Anime DB",
+  "description": "Sala de chat Otaku interactiva en tiempo real con base de datos de anime/manga, mensajes de voz, reproductor de música anime y Elizabeth, la IA moderadora inteligente.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
