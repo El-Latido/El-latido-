@@ -4,14 +4,16 @@
 
 [functions]
   directory = "netlify/functions"
-  node_compat = true
+  # Eliminamos la línea problemática para usar la compatibilidad moderna por defecto
 
 [[redirects]]
+  # Redirección transparente para la API del chat
   from = "/api/*"
   to = "/.netlify/functions/server/:splat"
   status = 200
 
 [[redirects]]
+  # Permite que la pantalla del chat cargue bien al refrescar la página
   from = "/*"
   to = "/index.html"
   status = 200
