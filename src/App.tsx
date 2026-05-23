@@ -72,9 +72,7 @@ interface Track {
   coverUrl: string;
 }
 
-const API_BASE = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1") || window.location.hostname.includes("run.app")
-  ? "/api"
-  : "/.netlify/functions/server";
+const API_BASE = "/api";
 
 export default function App() {
   // Authentication & session state
