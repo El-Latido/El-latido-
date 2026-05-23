@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -17,6 +18,12 @@ app.use((req, res, next) => {
     req.url = req.url.replace("/.netlify/functions/server", "/api");
   } else if (req.url.startsWith("/netlify/functions/server")) {
     req.url = req.url.replace("/netlify/functions/server", "/api");
+  } else if (!req.url.startsWith("/api")) {
+    const apiEndpoints = ["/login", "/messages", "/anime", "/music", "/users", "/elizabeth"];
+    const found = apiEndpoints.find(p => req.url.startsWith(p));
+    if (found) {
+      req.url = "/api" + req.url;
+    }
   }
   next();
 });
@@ -230,6 +237,56 @@ const messagesStore: ChatMessage[] = [
   }
 ];
 
+// File-based database persistence for Netlify serverless & local development restarts
+const DB_FILE = process.env.NETLIFY || process.env.LAMBDA_TASK_ROOT
+  ? "/tmp/otaku_db.json"
+  : path.join(process.cwd(), "otaku_db.json");
+
+function loadDatabase() {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const content = fs.readFileSync(DB_FILE, "utf-8");
+      const data = JSON.parse(content || "{}");
+      if (data.users && Object.keys(data.users).length > 0) {
+        // Clear and reload
+        for (const k in usersStore) delete usersStore[k];
+        Object.assign(usersStore, data.users);
+      }
+      if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
+        messagesStore.length = 0;
+        messagesStore.push(...data.messages);
+      }
+      if (data.anime && Array.isArray(data.anime) && data.anime.length > 0) {
+        dynamicAnimeDatabase.length = 0;
+        dynamicAnimeDatabase.push(...data.anime);
+      }
+      console.log(`[DATABASE] Base de datos cargada exitosamente desde ${DB_FILE}`);
+    } else {
+      console.log("[DATABASE] No se detectó base de datos previa. Inicializando con datos semilla.");
+      saveDatabase();
+    }
+  } catch (err) {
+    console.error("[DATABASE] Error cargando base de datos:", err);
+  }
+}
+
+function saveDatabase() {
+  try {
+    const data = {
+      users: usersStore,
+      messages: messagesStore,
+      anime: dynamicAnimeDatabase
+    };
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+    console.log(`[DATABASE] Base de datos guardada exitosamente en ${DB_FILE}`);
+  } catch (err) {
+    console.error("[DATABASE] Error guardando base de datos:", err);
+  }
+}
+
+// Initial boot load
+loadDatabase();
+
 // Helper to sanitize regex check of rude words for Elizabeth's fallback mode
 const toxicWords = ["odio", "muérete", "basura", "estúpido", "estupido", "tonto", "retrasado", "mierda", "pendejo", "idiota", "puto", "puta"];
 
@@ -378,6 +435,8 @@ app.post("/api/login", (req, res) => {
       timestamp: new Date().toISOString()
     });
 
+    saveDatabase();
+
     return res.json({ success: true, autoRegistered: true, user: usersStore[cleanUsername] });
   }
 
@@ -402,13 +461,15 @@ app.post("/api/login", (req, res) => {
   }
 
   // Public welcome greeting from ELIZABETH in the shared chat on login!
-  const loginGreeting = `¡Hola de nuevo, @${cleanUsername}! ✨ Qué alegría volver a tenerte en el chat. ¿Has estado viendo o leyendo algún anime o manga asombroso últimamente? Cuéntale a la sala o pregúntame lo que gustes por aquí en público. (◕‿◕✿)`;
+  const loginGreeting = `¡Hola de nuevo, @${cleanUsername}! ✨ Qué alegría volver a tenerte en el chat. ¿Has estado viendo o leyendo algún anime o manga asombroso últimamente? Cuáles de la lista te gustan, ¿o pregúntame lo que gustes por aquí en público? (◕‿◕✿)`;
   messagesStore.push({
     id: `eliz_wel_${Date.now()}`,
     username: "ELIZABETH",
     text: loginGreeting,
     timestamp: new Date().toISOString()
   });
+
+  saveDatabase();
 
   res.json({ success: true, user });
 });
@@ -519,6 +580,8 @@ app.post("/api/messages", async (req, res) => {
     }
   }
 
+  saveDatabase();
+
   res.json({ success: true, message: newMessage });
 });
 
@@ -609,6 +672,8 @@ app.post("/api/anime", (req, res) => {
   };
   messagesStore.push(sysMsg);
 
+  saveDatabase();
+
   res.json({ success: true, anime: newEntry });
 });
 
@@ -645,6 +710,7 @@ app.post("/api/users/unban", (req, res) => {
         isSystem: true,
         systemType: "welcome"
       });
+      saveDatabase();
       return res.json({ success: true, message: "El usuario ha sido desbaneado con éxito." });
     }
   }
