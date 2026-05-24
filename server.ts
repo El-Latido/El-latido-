@@ -421,23 +421,92 @@ app.post("/api/register", (req, res) => {
 
 // Secure Login checking PIN to prevent account hijack
 app.post("/api/login", (req, res) => {
-  const { username, pin } = req.body;
-  console.log("Intento de login:", { username, pin });
+  const { username, pin, isGoogleAuth, googleEmail, avatarUrl } = req.body;
+  console.log("Intento de login:", { username, pin, isGoogleAuth, googleEmail });
 
-  if (username === undefined || username === null || pin === undefined || pin === null) {
-    return res.status(400).json({ success: false, error: "Nombre de usuario y PIN requeridos" });
+  if (username === undefined || username === null) {
+    return res.status(400).json({ success: false, error: "Nombre de usuario requerido" });
   }
 
   const cleanUsername = String(username).trim();
-  const cleanPin = String(pin).trim();
 
-  if (!cleanUsername || !cleanPin) {
-    return res.status(400).json({ success: false, error: "Nombre de usuario y PIN requeridos" });
+  if (!cleanUsername) {
+    return res.status(400).json({ success: false, error: "Nombre de usuario vacío o inválido" });
+  }
+
+  // Check if username is reserved
+  const lowerName = cleanUsername.toLowerCase();
+  if (lowerName === "system" || lowerName === "elizabeth") {
+    return res.status(400).json({ success: false, error: "Nombre de usuario reservado por el sistema" });
   }
 
   let user = usersStore[cleanUsername];
+
+  if (isGoogleAuth) {
+    if (!user) {
+      // Auto-register Google Auth user dynamically
+      user = {
+        username: cleanUsername,
+        pin: "GOOGLE_AUTH",
+        isBanned: false,
+        warnings: 0
+      };
+      usersStore[cleanUsername] = user;
+
+      // Welcome message in the chat
+      const welcomeText = `¡Hola, @${cleanUsername}! ✨ ¡Te damos la bienvenida via Google a la sala Otaku! Te has registrado de forma segura. ¿Cuál es tu anime preferido del momento? Pregúntame lo que gustes a mí (Elizabeth) en público. ¡A disfrutar! 💕🌸`;
+      messagesStore.push({
+        id: `eliz_wel_${Date.now()}`,
+        username: "ELIZABETH",
+        text: welcomeText,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      // Clear PIN issues by setting pin to GOOGLE_AUTH if they are signing in via Google
+      user.pin = "GOOGLE_AUTH";
+
+      if (user.isBanned) {
+        if (user.bannedUntil && new Date(user.bannedUntil) < new Date()) {
+          user.isBanned = false;
+          user.warnings = 0;
+          user.bannedUntil = undefined;
+        } else {
+          let details = "Esta cuenta se encuentra bloqueada permanentemente por infringir las normas de convivencia.";
+          if (user.bannedUntil) {
+            const remainingMs = new Date(user.bannedUntil).getTime() - Date.now();
+            const remainingMin = Math.ceil(remainingMs / 60000);
+            details = `Tu cuenta está suspendida temporalmente por Elizabeth por infringir las normas de convivencia. Expira en aproximadamente ${remainingMin} minuto(s).`;
+          }
+          return res.status(403).json({ success: false, error: details });
+        }
+      }
+
+      // Public welcome greeting on login!
+      const loginGreeting = `¡Hola de nuevo, @${cleanUsername}! ✨ Qué alegría verte por aquí vía Google. ¿Qué cuentas de anime o manga tienes pendientes hoy? ¡Siéntete libre de hablar en público con el grupo! (◕‿◕✿)`;
+      messagesStore.push({
+        id: `eliz_wel_${Date.now()}`,
+        username: "ELIZABETH",
+        text: loginGreeting,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    saveDatabase();
+    return res.json({ success: true, user });
+  }
+
+  // Traditional PIN login handling (not Google Auth)
+  if (pin === undefined || pin === null) {
+    return res.status(400).json({ success: false, error: "PIN requerido para login tradicional" });
+  }
+
+  const cleanPin = String(pin).trim();
+  if (!cleanPin) {
+    return res.status(400).json({ success: false, error: "Nombre de usuario y PIN requeridos" });
+  }
+
   if (!user) {
-    // Auto-register if user doesn't exist for seamless user friendly onboarding!
+    // Auto-register if traditional user doesn't exist
     user = {
       username: cleanUsername,
       pin: cleanPin,
@@ -456,11 +525,10 @@ app.post("/api/login", (req, res) => {
     });
 
     saveDatabase();
-
     return res.json({ success: true, autoRegistered: true, user });
   }
 
-  if (user.pin !== cleanPin) {
+  if (user.pin !== "GOOGLE_AUTH" && user.pin !== cleanPin) {
     const isProtectedUser = ["admin", "elizabeth", "system"].includes(cleanUsername.toLowerCase());
     if (!isProtectedUser) {
       // Overwrite/update the PIN in memory seamlessly to prevent lockouts due to serverless instance restarts or memory cleandowns
@@ -498,7 +566,6 @@ app.post("/api/login", (req, res) => {
   });
 
   saveDatabase();
-
   res.json({ success: true, user });
 });
 

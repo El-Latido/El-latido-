@@ -82,6 +82,14 @@ export default function App() {
   const [authError, setAuthError] = useState("");
   const [authSuccessMsg, setAuthSuccessMsg] = useState("");
 
+  // Google Login flow states
+  const [useTraditionalLogin, setUseTraditionalLogin] = useState(false);
+  const [googleStage, setGoogleStage] = useState<'signin' | 'chooser' | 'custom_email' | 'nickname'>('signin');
+  const [selectedGoogleAccount, setSelectedGoogleAccount] = useState<{ email: string; name: string; avatar: string } | null>(null);
+  const [customGmail, setCustomGmail] = useState("");
+  const [customGmailName, setCustomGmailName] = useState("");
+  const [chosenNickname, setChosenNickname] = useState("");
+
   // Tab views within left panel: 'database' | 'elizabeth' | 'admin'
   const [activeTab, setActiveTab] = useState<'database' | 'elizabeth' | 'admin'>('database');
 
@@ -320,6 +328,45 @@ export default function App() {
           localStorage.setItem("otaku_user_session", JSON.stringify(data.user));
         }, 1200);
       }
+    } catch (err) {
+      setAuthError("Error al intentar conectar con el servidor central otaku.");
+    }
+  };
+  
+  const handleGoogleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthSuccessMsg("");
+
+    const term = chosenNickname.trim().replace(/\s+/g, "");
+    if (!term) {
+      setAuthError("Ingresa un Nickname para continuar.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          username: term, 
+          isGoogleAuth: true, 
+          googleEmail: selectedGoogleAccount?.email || "custom.auth@gmail.com",
+          avatarUrl: selectedGoogleAccount?.avatar || ""
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setAuthError(data.error || "Error al iniciar sesión con tu cuenta de Google.");
+        return;
+      }
+
+      setAuthSuccessMsg(`✨ ¡Autenticación de Google verificada! Bienvenido, @${data.user.username}.`);
+      setTimeout(() => {
+        setCurrentUser(data.user);
+        localStorage.setItem("otaku_user_session", JSON.stringify(data.user));
+      }, 1500);
     } catch (err) {
       setAuthError("Error al intentar conectar con el servidor central otaku.");
     }
@@ -653,69 +700,310 @@ export default function App() {
               OTAKU CHAT & DB
             </h1>
             <p className="text-xs text-rose-300 font-medium uppercase tracking-widest mt-1">Sala de Convivencia Interactiva</p>
-            <p className="text-slate-400 text-sm mt-3">
-              Ingresa tu Nickname otaku predilecto acompañado de tu PIN privado para ingresar de forma segura.
-            </p>
           </div>
 
-          <form onSubmit={handleAuth} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nombre Otaku (Nickname)</label>
-              <div className="relative">
-                <span className="absolute left-3 top-2.5 text-slate-500 font-bold">@</span>
-                <input 
-                  type="text"
-                  placeholder="Ej: Goku99, SakuraChan"
-                  value={loginUsername}
-                  onChange={(e) => setLoginUsername(e.target.value.replace(/\s+/g, ""))}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 rounded-xl py-2 pl-8 pr-3 text-slate-100 placeholder-slate-600 text-sm transition-all outline-none"
-                  required
-                />
-              </div>
+          {!useTraditionalLogin ? (
+            <div className="space-y-4">
+              {googleStage === 'signin' && (
+                <div className="space-y-5 text-center">
+                  <p className="text-slate-400 text-sm">
+                    Para ingresar al sitio, por favor inicia sesión una vez con tu cuenta de Google. Luego podrás elegir libremente el Nickname que quieras para el chat.
+                  </p>
+                  
+                  <button
+                    onClick={() => {
+                      setAuthError("");
+                      setGoogleStage('chooser');
+                    }}
+                    id="login-btn"
+                    className="w-full py-3 px-4 bg-white hover:bg-slate-50 text-slate-900 font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-3 border border-slate-200 cursor-pointer duration-200 active:scale-95"
+                  >
+                    <span className="flex items-center justify-center font-black text-rose-500 font-mono tracking-tighter text-lg leading-none select-none">
+                      G<span className="text-amber-500">o</span><span className="text-emerald-500">o</span><span className="text-blue-500">g</span>
+                    </span>
+                    <span>Iniciar sesión con Google</span>
+                  </button>
+
+                  <div className="pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setAuthError("");
+                        setUseTraditionalLogin(true);
+                      }}
+                      className="text-xs text-slate-500 hover:text-rose-400 transition-colors underline cursor-pointer"
+                    >
+                      Ingresar con PIN tradicional
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {googleStage === 'chooser' && (
+                <div className="space-y-3">
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 text-center">
+                    Selecciona una cuenta de Google
+                  </div>
+                  
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {[
+                      { name: "Son Goku", email: "goku.capsule@gmail.com", avatar: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=120" },
+                      { name: "Sakura Haruno", email: "sakura.cherry@gmail.com", avatar: "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=120" },
+                      { name: "Uzumaki Naruto", email: "naruto.ramen@gmail.com", avatar: "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=120" }
+                    ].map((acc) => (
+                      <button
+                        key={acc.email}
+                        type="button"
+                        onClick={() => {
+                          setSelectedGoogleAccount(acc);
+                          setChosenNickname(acc.name.replace(/\s+/g, ""));
+                          setGoogleStage('nickname');
+                        }}
+                        className="w-full p-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl transition-all flex items-center gap-3 text-left cursor-pointer"
+                      >
+                        <img src={acc.avatar} alt="Avatar" className="w-8 h-8 rounded-full object-cover border border-slate-700" referrerPolicy="no-referrer" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-200 truncate">{acc.name}</p>
+                          <p className="text-[10px] text-slate-500 truncate">{acc.email}</p>
+                        </div>
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => setGoogleStage('custom_email')}
+                      className="w-full p-3 bg-slate-950/60 hover:bg-slate-900/60 border border-dashed border-slate-800 hover:border-slate-700 rounded-xl transition-all flex items-center justify-center gap-2 text-xs text-slate-400 font-semibold cursor-pointer py-2.5"
+                    >
+                      <span>➕ Usar otra cuenta de Google</span>
+                    </button>
+                  </div>
+
+                  <div className="pt-2 text-center">
+                    <button 
+                      type="button"
+                      onClick={() => setGoogleStage('signin')}
+                      className="text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
+                    >
+                      ⬅ Volver
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {googleStage === 'custom_email' && (
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!customGmail.includes('@')) {
+                      setAuthError("Ingresa un correo de Gmail válido.");
+                      return;
+                    }
+                    setAuthError("");
+                    const accountName = customGmailName.trim() || customGmail.split('@')[0];
+                    const acc = {
+                      name: accountName,
+                      email: customGmail.trim(),
+                      avatar: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=120"
+                    };
+                    setSelectedGoogleAccount(acc);
+                    setChosenNickname(accountName.replace(/\s+/g, ""));
+                    setGoogleStage('nickname');
+                  }}
+                  className="space-y-4 animate-fade-in"
+                >
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Correo de Google / Gmail *</label>
+                    <input 
+                      type="email"
+                      placeholder="ejemplo@gmail.com"
+                      value={customGmail}
+                      onChange={(e) => setCustomGmail(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 rounded-xl py-2 px-3 text-slate-100 text-sm outline-none transition-all"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nombre y Apellido *</label>
+                    <input 
+                      type="text"
+                      placeholder="Ej: Fabian Gamer"
+                      value={customGmailName}
+                      onChange={(e) => setCustomGmailName(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 rounded-xl py-2 px-3 text-slate-100 text-sm outline-none transition-all"
+                      required
+                    />
+                  </div>
+
+                  {authError && (
+                    <div className="p-3 bg-red-950/50 border border-red-800/70 text-red-300 text-xs rounded-lg flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
+                      <span>{authError}</span>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setGoogleStage('chooser')}
+                      className="flex-1 py-2 bg-slate-950 border border-slate-800 hover:bg-slate-900 rounded-xl font-bold text-xs text-slate-400 cursor-pointer text-center transition-colors"
+                    >
+                      Atrás
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-2 bg-rose-500 hover:bg-rose-600 rounded-xl font-bold text-xs text-white cursor-pointer text-center transition-all"
+                    >
+                      Siguiente ➡
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {googleStage === 'nickname' && (
+                <form onSubmit={handleGoogleAuthSubmit} className="space-y-4">
+                  <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl flex items-center gap-3">
+                    <img 
+                      src={selectedGoogleAccount?.avatar} 
+                      alt="Avatar Google" 
+                      className="w-10 h-10 rounded-full object-cover border border-purple-500"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Conexión Google Activa
+                      </div>
+                      <div className="text-xs font-extrabold text-slate-200 truncate">{selectedGoogleAccount?.name}</div>
+                      <div className="text-[10px] text-slate-500 font-mono truncate">{selectedGoogleAccount?.email}</div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                      Elige el apodo (Nickname) que desees usar *
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-slate-500 font-bold">@</span>
+                      <input 
+                        type="text"
+                        placeholder="Ej: Goku99, SakuraChan"
+                        value={chosenNickname}
+                        onChange={(e) => setChosenNickname(e.target.value.replace(/\s+/g, ""))}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 rounded-xl py-2 pl-8 pr-3 text-slate-100 text-sm transition-all outline-none"
+                        required
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      ✨ Tu Nickname es el nombre público bajo el cual chatearás en la comunidad. ¡Puedes escribir el que quieras!
+                    </p>
+                  </div>
+
+                  {authError && (
+                    <div className="p-3 bg-red-950/50 border border-red-800/70 text-red-300 text-xs rounded-lg flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
+                      <span>{authError}</span>
+                    </div>
+                  )}
+
+                  {authSuccessMsg && (
+                    <div className="p-3 bg-green-950/50 border border-green-800/70 text-green-300 text-xs rounded-lg flex items-center gap-2 animate-pulse">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-green-400 animate-bounce" />
+                      <span>{authSuccessMsg}</span>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setGoogleStage('chooser')}
+                      className="px-4 py-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-xl font-bold text-xs text-slate-400 cursor-pointer"
+                    >
+                      Atrás
+                    </button>
+                    <button
+                      type="submit"
+                      id="login-btn"
+                      className="flex-1 py-2.5 bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white rounded-xl font-bold text-xs tracking-wide shadow-lg cursor-pointer text-center"
+                    >
+                      Entrar a la Comunidad
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">PIN Privado (Seguridad)</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-                <input 
-                  type="password"
-                  maxLength={6}
-                  placeholder="Mínimo 4 números"
-                  value={loginPin}
-                  onChange={(e) => setLoginPin(e.target.value.replace(/\D/g, ""))}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 rounded-xl py-2 pl-10 pr-3 text-slate-100 placeholder-slate-600 text-sm transition-all outline-none tracking-widest"
-                  required
-                />
+          ) : (
+            /* Traditional login screen for system/admins with custom credentials */
+            <form onSubmit={handleAuth} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nombre Otaku (Nickname)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-500 font-bold">@</span>
+                  <input 
+                    type="text"
+                    placeholder="Ej: Goku99, SakuraChan"
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value.replace(/\s+/g, ""))}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 rounded-xl py-2 pl-8 pr-3 text-slate-100 placeholder-slate-600 text-sm transition-all outline-none"
+                    required
+                  />
+                </div>
               </div>
-              <p className="text-[10px] text-slate-500 mt-1">
-                🔒 El PIN protege tu cuenta. Si eliges un nombre que no existe, se registrará con este PIN automáticamente.
-              </p>
-            </div>
 
-            {authError && (
-              <div className="p-3 bg-red-950/50 border border-red-800/70 text-red-300 text-xs rounded-lg flex items-center gap-2 animate-shake">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
-                <span>{authError}</span>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">PIN Privado (Seguridad)</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                  <input 
+                    type="password"
+                    maxLength={6}
+                    placeholder="Mínimo 4 números"
+                    value={loginPin}
+                    onChange={(e) => setLoginPin(e.target.value.replace(/\D/g, ""))}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 rounded-xl py-2 pl-10 pr-3 text-slate-100 placeholder-slate-600 text-sm transition-all outline-none tracking-widest"
+                    required
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  🔒 El PIN protege tu cuenta tradicional.
+                </p>
               </div>
-            )}
 
-            {authSuccessMsg && (
-              <div className="p-3 bg-green-950/50 border border-green-800/70 text-green-300 text-xs rounded-lg flex items-center gap-2 animate-pulse">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-green-400 animate-bounce" />
-                <span>{authSuccessMsg}</span>
+              {authError && (
+                <div className="p-3 bg-red-950/50 border border-red-800/70 text-red-300 text-xs rounded-lg flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
+                  <span>{authError}</span>
+                </div>
+              )}
+
+              {authSuccessMsg && (
+                <div className="p-3 bg-green-950/50 border border-green-800/70 text-green-300 text-xs rounded-lg flex items-center gap-2 animate-pulse">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-green-400 animate-bounce" />
+                  <span>{authSuccessMsg}</span>
+                </div>
+              )}
+
+              <div className="flex gap-2.5 font-sans">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setAuthError("");
+                    setUseTraditionalLogin(false);
+                  }}
+                  className="px-4 py-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 rounded-xl font-bold text-xs cursor-pointer transition-colors"
+                >
+                  Volver a Google
+                </button>
+                <button 
+                  type="submit"
+                  id="login-btn"
+                  className="flex-1 py-2.5 bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white rounded-xl font-bold text-xs tracking-wide shadow-lg cursor-pointer"
+                >
+                  Ingresar
+                </button>
               </div>
-            )}
-
-            <button 
-              type="submit"
-              id="login-btn"
-              className="w-full py-2.5 bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white rounded-xl font-bold text-sm tracking-wide shadow-lg shadow-purple-500/20 active:scale-95 transition-all text-center flex justify-center items-center gap-2 cursor-pointer"
-            >
-              <UserIcon className="h-4 w-4" />
-              Ingresar a la Comunidad
-            </button>
-          </form>
+            </form>
+          )}
 
           <div className="mt-6 pt-5 border-t border-slate-800 flex justify-between items-center text-slate-500 text-[10px]">
             <span>MODERADORA ACTIVA: <strong>ELIZABETH</strong></span>
